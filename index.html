@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة المواد والأقساط</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+</head>
+<body>
+
+    <div id="sync-status" class="status-online">online</div>
+
+    <div id="pwaInstallPrompt" class="pwa-prompt">
+        <div class="pwa-box">
+            <h3>تثبيت التطبيق</h3>
+            <p>قم بتثبيت التطبيق للعمل بشكل أسرع وبدون إنترنت.</p>
+            <div class="pwa-buttons">
+                <button class="btn btn-success" onclick="installPWA()">تثبيت</button>
+                <button class="btn btn-danger" onclick="skipPWA()">تخطي</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="logo">نظام الإدارة</div>
+        <button class="nav-btn active" onclick="switchPage('materialsPage', this)">إدارة المواد</button>
+        <button class="nav-btn" onclick="switchPage('installmentsPage', this)">نظام الأقساط</button>
+    </div>
+
+    <div class="main-content">
+        <div id="materialsPage" class="page-section active">
+            <div class="card">
+                <div class="card-header">
+                    <h2>قائمة المواد</h2>
+                    <button class="btn btn-primary" onclick="addMaterial()">+ إضافة مادة</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>اسم المادة</th>
+                            <th>سعر الشراء</th>
+                            <th>البيع نقداً</th>
+                            <th>قسط (10 أشهر)</th>
+                            <th>قسط (12 شهر)</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="materialsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="installmentsPage" class="page-section">
+            <div class="card">
+                <div class="card-header">
+                    <h2>إدارة الزبائن والأقساط</h2>
+                    <div>
+                        <button class="btn btn-danger" onclick="showLateCustomers()">المتأخرين ⚠️</button>
+                        <button class="btn btn-primary" onclick="addCustomer()">+ إضافة زبون</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>اسم الزبون</th>
+                            <th>رقم الهاتف</th>
+                            <th>الرصيد الكلي</th>
+                            <th>العمليات السريعة</th>
+                            <th>خيارات الحساب</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customersTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-box">
+            <div id="modalText" class="modal-title"></div>
+            <input type="text" id="modalInput" class="modal-input" style="display: none;">
+            <div class="modal-buttons" id="modalButtons">
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
