@@ -151,14 +151,14 @@ async function syncDataMerge() {
     }
 }
 
-function showModal({ type, message, defaultValue = '' }) {
+function showModal({ type, message, defaultValue = '', extraData = null }) {
     return new Promise((resolve) => {
         const modal = document.getElementById('customModal');
         const modalText = document.getElementById('modalText');
         const modalInput = document.getElementById('modalInput');
         const modalButtons = document.getElementById('modalButtons');
 
-        modalText.innerText = typeof message === 'string' ? message : '';
+        modalText.innerText = typeof message === 'string' ? message : (message.title || '');
         modalButtons.innerHTML = '';
         modalInput.style.display = 'none';
         modalInput.value = defaultValue;
@@ -187,6 +187,55 @@ function showModal({ type, message, defaultValue = '' }) {
                 }
             });
         } 
+        else if (type === 'alert_with_print_receipt') {
+            const btnOk = document.createElement('button');
+            btnOk.className = 'btn-modal btn-modal-confirm';
+            btnOk.innerText = 'موافق (Enter)';
+            btnOk.onclick = () => closeAction(true);
+
+            const btnPrint = document.createElement('button');
+            btnPrint.className = 'btn-modal btn-primary';
+            btnPrint.style.background = '#10b981';
+            btnPrint.innerText = 'طباعة الوصل';
+            btnPrint.onclick = () => {
+                printReceipt(extraData.customerName, extraData.amount, extraData.date, extraData.notes, extraData.remainingDebt);
+            };
+
+            modalButtons.appendChild(btnOk);
+            modalButtons.appendChild(btnPrint);
+
+            window.addEventListener('keydown', function onKey(e) {
+                if (e.key === 'Enter' && modal.classList.contains('active')) {
+                    window.removeEventListener('keydown', onKey);
+                    btnOk.click();
+                }
+            });
+        }
+        else if (type === 'alert_with_print_statement') {
+            const btnOk = document.createElement('button');
+            btnOk.className = 'btn-modal btn-modal-confirm';
+            btnOk.innerText = 'موافق (Enter)';
+            btnOk.onclick = () => closeAction(true);
+
+            const btnPrint = document.createElement('button');
+            btnPrint.className = 'btn-modal btn-primary';
+            btnPrint.style.background = '#10b981';
+            btnPrint.innerText = 'طباعة الكشف';
+            btnPrint.onclick = () => {
+                let c = customers.find(c => c.id === extraData.customerId);
+                printStatement(c);
+            };
+
+            modalButtons.appendChild(btnOk);
+            modalButtons.appendChild(btnPrint);
+
+            window.addEventListener('keydown', function onKey(e) {
+                if (e.key === 'Enter' && modal.classList.contains('active')) {
+                    window.removeEventListener('keydown', onKey);
+                    btnOk.click();
+                }
+            });
+        }
         else if (type === 'confirm') {
             const btnYes = document.createElement('button');
             btnYes.className = 'btn-modal btn-modal-confirm';
@@ -514,7 +563,18 @@ window.payInstallment = async function(id) {
     addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
 
     renderCustomers();
-    customAlert(`تم تسديد مبلغ ${payAmount.toLocaleString()} دينار للزبون ${customer.name} بنجاح!`);
+    
+    await showModal({
+        type: 'alert_with_print_receipt',
+        message: `تم تسديد مبلغ ${payAmount.toLocaleString()} دينار للزبون ${customer.name} بنجاح!`,
+        extraData: {
+            customerName: customer.name,
+            amount: payAmount,
+            date: res.date,
+            notes: res.notes,
+            remainingDebt: customer.totalDebt
+        }
+    });
 };
 
 window.addNewDebt = async function(id) {
@@ -549,7 +609,12 @@ window.showDetails = async function(id) {
     let customer = customers.find(c => c.id === id);
     let detailsText = customer.transactions.map(t => `📅 التاريخ: ${t.date}\nالنوع: ${t.type}\nالمبلغ: ${Number(t.amount).toLocaleString()} دينار\nالتفاصيل: ${t.notes}`).join('\n-----------------\n');
     let msg = `تفاصيل الزبون: ${customer.name}\n\nفهرس وتفاصيل الحركات:\n\n${detailsText || 'لا توجد تفاصيل حالياً'}`;
-    await customAlert(msg);
+    
+    await showModal({
+        type: 'alert_with_print_statement',
+        message: msg,
+        extraData: { customerId: id }
+    });
 };
 
 window.cancelInstallment = async function(id) {
@@ -599,7 +664,12 @@ window.showStatement = async function(id) {
     let customer = customers.find(c => c.id === id);
     let transText = customer.transactions.filter(t => t.type !== 'تسديد').map(t => `📅 ${t.date} | ${t.type}: ${Number(t.amount).toLocaleString()} | ملاحظات: ${t.notes}`).join('\n');
     let msg = `كشف حساب الزبون:\n\nالاسم: ${customer.name}\nرقم الهاتف: ${customer.phone}\nالرصيد الكلي المتبقي: ${Number(customer.totalDebt).toLocaleString()} دينار\n\nسجل العمليات:\n${transText || 'لا توجد عمليات مسجلة'}`;
-    await customAlert(msg);
+    
+    await showModal({
+        type: 'alert_with_print_statement',
+        message: msg,
+        extraData: { customerId: id }
+    });
 };
 
 window.showLateCustomers = async function() {
@@ -609,6 +679,76 @@ window.showLateCustomers = async function() {
     } else {
         await customAlert("لا يوجد زبائن متأخرين حالياً.");
     }
+};
+
+window.printData = function(title, contentHTML) {
+    let printWindow = window.open('', '', 'height=600,width=800');
+    printWindow.document.write('<html lang="ar" dir="rtl"><head><title>' + title + '</title>');
+    printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">');
+    printWindow.document.write('<style>');
+    printWindow.document.write('body{font-family:"Tajawal",sans-serif; padding:20px; text-align:right;}');
+    printWindow.document.write('table{width:100%;border-collapse:collapse;margin-top:20px;}');
+    printWindow.document.write('th,td{border:1px solid #ddd;padding:10px;text-align:right;}');
+    printWindow.document.write('th{background-color:#f2f2f2;}');
+    printWindow.document.write('.header{text-align:center;margin-bottom:20px;border-bottom:2px solid #000;padding-bottom:10px;}');
+    printWindow.document.write('.footer{margin-top:40px; text-align:center; font-weight:bold;}');
+    printWindow.document.write('</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write('<div class="header"><h2>' + title + '</h2></div>');
+    printWindow.document.write(contentHTML);
+    printWindow.document.write('<div class="footer"><p>نظام إدارة المواد والأقساط</p></div>');
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 500);
+};
+
+window.printReceipt = function(customerName, amount, date, notes, remainingDebt) {
+    let content = `
+        <p><strong>اسم الزبون:</strong> ${customerName}</p>
+        <p><strong>تاريخ التسديد:</strong> ${date}</p>
+        <p><strong>المبلغ المسدد:</strong> ${Number(amount).toLocaleString()} دينار</p>
+        <p><strong>الرصيد المتبقي:</strong> ${Number(remainingDebt).toLocaleString()} دينار</p>
+        <p><strong>ملاحظات:</strong> ${notes || 'لا توجد'}</p>
+        <br>
+        <div style="display:flex; justify-content:space-around; margin-top:30px;">
+            <div>
+                <p style="font-weight:bold;">توقيع المستلم</p>
+                <p>.........................</p>
+            </div>
+            <div>
+                <p style="font-weight:bold;">توقيع الزبون</p>
+                <p>.........................</p>
+            </div>
+        </div>
+    `;
+    printData('وصل تسديد', content);
+};
+
+window.printStatement = function(customer) {
+    let transRows = customer.transactions.map(t => `<tr><td>${t.date}</td><td>${t.type}</td><td>${Number(t.amount).toLocaleString()}</td><td>${t.notes || '-'}</td></tr>`).join('');
+    let content = `
+        <p><strong>اسم الزبون:</strong> ${customer.name}</p>
+        <p><strong>رقم الهاتف:</strong> ${customer.phone}</p>
+        <p><strong>الرصيد الكلي المتبقي:</strong> ${Number(customer.totalDebt).toLocaleString()} دينار</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>التاريخ</th>
+                    <th>النوع</th>
+                    <th>المبلغ (دينار)</th>
+                    <th>ملاحظات</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${transRows || '<tr><td colspan="4" style="text-align:center;">لا توجد عمليات مسجلة</td></tr>'}
+            </tbody>
+        </table>
+    `;
+    printData('كشف حساب / معاملات الزبون', content);
 };
 
 window.onload = async function() {
