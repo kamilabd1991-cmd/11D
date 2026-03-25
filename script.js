@@ -753,26 +753,22 @@ window.printReceipt = function(customerName, amount, date, notes, remainingDebt)
             <table class="receipt-table">
                 <thead>
                     <tr>
-                        <th>دولار</th>
                         <th>دينار</th>
-                        <th style="border: none;"></th>
+                        <th>دولار</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td></td>
                         <td>${Number(previousDebt).toLocaleString()}</td>
-                        <td class="row-label">الديون</td>
+                        <td>الديون</td>
                     </tr>
                     <tr>
-                        <td></td>
                         <td>${Number(amount).toLocaleString()}</td>
-                        <td class="row-label">الواصل</td>
+                        <td>الواصل</td>
                     </tr>
                     <tr>
-                        <td></td>
                         <td>${Number(remainingDebt).toLocaleString()}</td>
-                        <td class="row-label">المتبقي</td>
+                        <td>المتبقي</td>
                     </tr>
                 </tbody>
             </table>
@@ -793,14 +789,13 @@ window.printReceipt = function(customerName, amount, date, notes, remainingDebt)
         .receipt-container { width: 100%; }
         .receipt-header-box { border: 1px solid #000; text-align: center; padding: 10px; margin-bottom: 10px; }
         .receipt-info-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; font-size: 14px;}
-        .receipt-customer-box { border: 1px solid #000; border-radius: 20px; padding: 8px 10px; text-align: right; font-weight: bold; font-size: 15px; margin-bottom: 10px; }
+        .receipt-customer-box { border: 1px solid #000; border-radius: 20px; padding: 6px 10px; text-align: right; font-weight: bold; font-size: 14px; margin: 0 15px 10px 15px; }
         .receipt-notes { text-align: right; font-weight: bold; margin-bottom: 10px; font-size: 14px;}
         .receipt-table { width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; margin-bottom: 10px;}
         .receipt-table th { font-weight: normal; font-size: 14px; padding-bottom: 5px;}
         .receipt-table td { border: 1px solid #000; padding: 8px; font-size: 15px;}
-        .receipt-table td:first-child { width: 25%; }
-        .receipt-table td:nth-child(2) { width: 45%; }
-        .receipt-table td.row-label { border: none; text-align: right; padding-right: 10px; width: 30%; font-size: 14px;}
+        .receipt-table td:first-child { width: 50%; }
+        .receipt-table td:nth-child(2) { width: 50%; }
         .receipt-footer-time { text-align: center; font-size: 12px; margin-top: 10px; direction: ltr;}
     `);
     printWindow.document.write('</style>');
