@@ -332,3 +332,15 @@ tr:hover { background-color: #f9fafb; }
     background: rgba(200, 200, 200, 0.3);
     cursor: not-allowed;
 }
+
+.search-input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: inherit;
+    outline: none;
+    width: 200px;
+}
+.search-input:focus {
+    border-color: var(--primary);
+}
