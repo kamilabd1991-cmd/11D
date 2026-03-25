@@ -35,7 +35,10 @@
             <div class="card">
                 <div class="card-header">
                     <h2>قائمة المواد</h2>
-                    <button class="btn btn-primary" onclick="addMaterial()">+ إضافة مادة</button>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="searchMaterial" class="search-input" placeholder="بحث عن مادة..." onkeyup="filterMaterials()">
+                        <button class="btn btn-primary" onclick="addMaterial()">+ إضافة مادة</button>
+                    </div>
                 </div>
                 <table>
                     <thead>
@@ -58,7 +61,8 @@
             <div class="card">
                 <div class="card-header">
                     <h2>إدارة الزبائن والأقساط</h2>
-                    <div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="searchCustomer" class="search-input" placeholder="بحث عن زبون..." onkeyup="filterCustomers()">
                         <button class="btn btn-danger" onclick="showLateCustomers()">المتأخرين ⚠️</button>
                         <button class="btn btn-primary" onclick="addCustomer()">+ إضافة زبون</button>
                     </div>
