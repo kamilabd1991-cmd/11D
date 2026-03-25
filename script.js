@@ -390,6 +390,24 @@ function renderMaterials() {
     });
 }
 
+window.filterMaterials = function() {
+    let input = document.getElementById('searchMaterial').value.toLowerCase();
+    let rows = document.getElementById('materialsTableBody').getElementsByTagName('tr');
+    for (let i = 0; i < rows.length; i++) {
+        let name = rows[i].getElementsByTagName('td')[0].innerText.toLowerCase();
+        rows[i].style.display = name.includes(input) ? "" : "none";
+    }
+};
+
+window.filterCustomers = function() {
+    let input = document.getElementById('searchCustomer').value.toLowerCase();
+    let rows = document.getElementById('customersTableBody').getElementsByTagName('tr');
+    for (let i = 0; i < rows.length; i++) {
+        let name = rows[i].getElementsByTagName('td')[0].innerText.toLowerCase();
+        rows[i].style.display = name.includes(input) ? "" : "none";
+    }
+};
+
 window.addMaterial = async function() {
     let name = await customPrompt("أدخل اسم المادة الجديدة:");
     if (!name) return;
@@ -707,25 +725,94 @@ window.printData = function(title, contentHTML) {
 };
 
 window.printReceipt = function(customerName, amount, date, notes, remainingDebt) {
-    let content = `
-        <p><strong>اسم الزبون:</strong> ${customerName}</p>
-        <p><strong>تاريخ التسديد:</strong> ${date}</p>
-        <p><strong>المبلغ المسدد:</strong> ${Number(amount).toLocaleString()} دينار</p>
-        <p><strong>الرصيد المتبقي:</strong> ${Number(remainingDebt).toLocaleString()} دينار</p>
-        <p><strong>ملاحظات:</strong> ${notes || 'لا توجد'}</p>
-        <br>
-        <div style="display:flex; justify-content:space-around; margin-top:30px;">
-            <div>
-                <p style="font-weight:bold;">توقيع المستلم</p>
-                <p>.........................</p>
+    let receiptNumber = Math.floor(1000 + Math.random() * 9000);
+    let previousDebt = Number(remainingDebt) + Number(amount);
+    let currentDate = new Date().toLocaleString('en-GB');
+    
+    let contentHTML = `
+        <div class="receipt-container">
+            <div class="receipt-header-box">
+                <h2 style="margin: 0; font-size: 20px;">مجمع كامل فون للتقسيط</h2>
+                <p style="margin: 5px 0; font-size: 13px;">اجهزة كهربائية - اثاث منزلية - موبايلات</p>
+                <p style="margin: 5px 0; font-size: 14px; font-weight: bold; direction: ltr;">0773 676 1213 &nbsp;&nbsp;&nbsp; 0781 800 7750</p>
             </div>
-            <div>
-                <p style="font-weight:bold;">توقيع الزبون</p>
-                <p>.........................</p>
+            
+            <div class="receipt-info-row">
+                <span>تأريخ: ${date}</span>
+                <span>رقم الوصل: ${receiptNumber}</span>
+            </div>
+            
+            <div class="receipt-customer-box">
+                أسم الزبون ${customerName}
+            </div>
+            
+            <div class="receipt-notes">
+                الملاحظات: ${notes || ''}
+            </div>
+            
+            <table class="receipt-table">
+                <thead>
+                    <tr>
+                        <th>دولار</th>
+                        <th>دينار</th>
+                        <th style="border: none;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td></td>
+                        <td>${Number(previousDebt).toLocaleString()}</td>
+                        <td class="row-label">الديون</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>${Number(amount).toLocaleString()}</td>
+                        <td class="row-label">الواصل</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>${Number(remainingDebt).toLocaleString()}</td>
+                        <td class="row-label">المتبقي</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="receipt-footer-time">
+                ${currentDate}
             </div>
         </div>
     `;
-    printData('وصل تسديد', content);
+
+    let printWindow = window.open('', '', 'height=600,width=800');
+    printWindow.document.write('<html lang="ar" dir="rtl"><head><title>طباعة وصل</title>');
+    printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">');
+    printWindow.document.write('<style>');
+    printWindow.document.write(`
+        @page { size: 80mm auto; margin: 0; }
+        body { font-family: 'Tajawal', sans-serif; padding: 10px; margin: 0; background: #fff; color: #000; font-size: 16px; width: 300px; margin: auto; }
+        .receipt-container { width: 100%; }
+        .receipt-header-box { border: 1px solid #000; text-align: center; padding: 10px; margin-bottom: 10px; }
+        .receipt-info-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; font-size: 14px;}
+        .receipt-customer-box { border: 1px solid #000; border-radius: 20px; padding: 8px 10px; text-align: right; font-weight: bold; font-size: 15px; margin-bottom: 10px; }
+        .receipt-notes { text-align: right; font-weight: bold; margin-bottom: 10px; font-size: 14px;}
+        .receipt-table { width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; margin-bottom: 10px;}
+        .receipt-table th { font-weight: normal; font-size: 14px; padding-bottom: 5px;}
+        .receipt-table td { border: 1px solid #000; padding: 8px; font-size: 15px;}
+        .receipt-table td:first-child { width: 25%; }
+        .receipt-table td:nth-child(2) { width: 45%; }
+        .receipt-table td.row-label { border: none; text-align: right; padding-right: 10px; width: 30%; font-size: 14px;}
+        .receipt-footer-time { text-align: center; font-size: 12px; margin-top: 10px; direction: ltr;}
+    `);
+    printWindow.document.write('</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(contentHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 500);
 };
 
 window.printStatement = function(customer) {
