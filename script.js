@@ -1,72 +1,29 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, writeBatch } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-firestore.js";
+document.addEventListener('contextmenu', event => event.preventDefault());
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBaeTcv0ZkMLQ2vUVuAmz5kuYDbC1ztEIE",
-    authDomain: "olkjoi.firebaseapp.com",
-    projectId: "olkjoi",
-    storageBucket: "olkjoi.firebasestorage.app",
-    messagingSenderId: "483254024291",
-    appId: "1:483254024291:web:f7be44be97410ad3fae056"
+    apiKey: "AIzaSyCZlIbRIbQmi6ktmDdlJdxZz4pu-L-Jj9s",
+    authDomain: "d10x-37f8c.firebaseapp.com",
+    projectId: "d10x-37f8c",
+    storageBucket: "d10x-37f8c.appspot.com",
+    messagingSenderId: "1037956330902",
+    appId: "1:1037956330902:web:04f9ec2e311ca56f218360",
+    measurementId: "G-WD2MTCN3L5"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const collections = {
+    materials: db.collection('materials'),
+    customers: db.collection('customers')
+};
 
 let materials = [];
 let customers = [];
-let syncQueue = [];
-
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.error(err));
-}
-
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    document.getElementById('pwaInstallPrompt').style.display = 'flex';
-});
-
-window.installPWA = function() {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then(() => {
-            deferredPrompt = null;
-            document.getElementById('pwaInstallPrompt').style.display = 'none';
-        });
-    }
-};
-
-window.skipPWA = function() {
-    document.getElementById('pwaInstallPrompt').style.display = 'none';
-};
-
-function updateConnectionStatus(status) {
-    const statusDiv = document.getElementById('sync-status');
-    statusDiv.className = `status-${status}`;
-    statusDiv.innerText = status;
-}
-
-window.addEventListener('online', syncDataMerge);
-window.addEventListener('offline', () => updateConnectionStatus('offline'));
 
 async function loadLocalData() {
-    let m = await localforage.getItem('materials');
-    let c = await localforage.getItem('customers');
-    let sq = await localforage.getItem('syncQueue');
-    
-    if (m) materials = m;
-    if (c) customers = c;
-    if (sq) syncQueue = sq;
-
-    if (navigator.onLine) {
-        syncDataMerge();
-    } else {
-        updateConnectionStatus('offline');
-        renderMaterials();
-        renderCustomers();
-    }
+    materials = (await localforage.getItem('materials')) || [];
+    customers = (await localforage.getItem('customers')) || [];
 }
 
 async function saveLocalData() {
@@ -74,125 +31,210 @@ async function saveLocalData() {
     await localforage.setItem('customers', customers);
 }
 
-async function addToSyncQueue(action) {
-    syncQueue.push(action);
-    await localforage.setItem('syncQueue', syncQueue);
-    if (navigator.onLine) {
-        syncDataMerge();
+async function syncData() {
+    if (!navigator.onLine) return;
+
+    let queue = (await localforage.getItem('syncQueue')) || [];
+    for (let action of queue) {
+        try {
+            if (action.type === 'add' || action.type === 'update') {
+                await collections[action.collection].doc(action.id.toString()).set(action.data);
+            } else if (action.type === 'delete') {
+                await collections[action.collection].doc(action.id.toString()).delete();
+            }
+        } catch (e) {}
     }
-}
+    await localforage.setItem('syncQueue', []);
 
-async function syncDataMerge() {
-    updateConnectionStatus('syncing');
     try {
-        const materialsSnapshot = await getDocs(collection(db, "materials"));
-        let serverMaterials = [];
-        materialsSnapshot.forEach((d) => { serverMaterials.push(d.data()); });
+        const materialsSnap = await collections.materials.get();
+        const serverMaterials = materialsSnap.docs.map(doc => doc.data());
 
-        const customersSnapshot = await getDocs(collection(db, "customers"));
-        let serverCustomers = [];
-        customersSnapshot.forEach((d) => { serverCustomers.push(d.data()); });
+        const customersSnap = await collections.customers.get();
+        const serverCustomers = customersSnap.docs.map(doc => doc.data());
 
-        let mergedMaterials = [...serverMaterials];
-        materials.forEach(localMat => {
-            let index = mergedMaterials.findIndex(sm => sm.id === localMat.id);
-            if (index > -1) mergedMaterials[index] = localMat;
-            else mergedMaterials.push(localMat);
-        });
+        materials = mergeById(materials, serverMaterials);
+        customers = mergeById(customers, serverCustomers);
 
-        let mergedCustomers = [...serverCustomers];
-        customers.forEach(localCus => {
-            let index = mergedCustomers.findIndex(sc => sc.id === localCus.id);
-            if (index > -1) mergedCustomers[index] = localCus;
-            else mergedCustomers.push(localCus);
-        });
-
-        let deletedMaterialIds = syncQueue.filter(q => q.type === 'DELETE_MATERIAL').map(q => q.data.id);
-        let deletedCustomerIds = syncQueue.filter(q => q.type === 'DELETE_CUSTOMER').map(q => q.data.id);
-
-        mergedMaterials = mergedMaterials.filter(m => !deletedMaterialIds.includes(m.id));
-        mergedCustomers = mergedCustomers.filter(c => !deletedCustomerIds.includes(c.id));
-
-        const batch = writeBatch(db);
-        
-        mergedMaterials.forEach(m => {
-            let docRef = doc(db, "materials", m.id.toString());
-            batch.set(docRef, m, { merge: true });
-        });
-        deletedMaterialIds.forEach(id => {
-            let docRef = doc(db, "materials", id.toString());
-            batch.delete(docRef);
-        });
-
-        mergedCustomers.forEach(c => {
-            let docRef = doc(db, "customers", c.id.toString());
-            batch.set(docRef, c, { merge: true });
-        });
-        deletedCustomerIds.forEach(id => {
-            let docRef = doc(db, "customers", id.toString());
-            batch.delete(docRef);
-        });
-
-        await batch.commit();
-
-        syncQueue = [];
-        await localforage.setItem('syncQueue', syncQueue);
-
-        materials = mergedMaterials;
-        customers = mergedCustomers;
         await saveLocalData();
-        
         renderMaterials();
         renderCustomers();
-        updateConnectionStatus('online');
-    } catch (error) {
-        console.error(error);
-        updateConnectionStatus('offline');
-    }
+    } catch (e) {}
 }
 
-function showModal({ type, message, defaultValue = '', extraData = null }) {
+function mergeById(localArr, serverArr) {
+    const map = {};
+    [...serverArr, ...localArr].forEach(item => {
+        map[item.id] = item;
+    });
+    return Object.values(map);
+}
+
+async function enqueueSync(action) {
+    let queue = (await localforage.getItem('syncQueue')) || [];
+    queue.push(action);
+    await localforage.setItem('syncQueue', queue);
+}
+
+window.addEventListener('online', syncData);
+
+function openTab(tabName, buttonEl) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(tabName).classList.add('active');
+    buttonEl.classList.add('active');
+}
+
+function showPasswordModal() {
+    document.getElementById('passwordModal').style.display = 'block';
+    document.getElementById('appContent').style.display = 'none';
+}
+function hidePasswordModal() {
+    document.getElementById('passwordModal').style.display = 'none';
+    document.getElementById('appContent').style.display = 'block';
+}
+
+function renderMaterials() {
+    let materialsList = document.getElementById('materialsList');
+    materialsList.innerHTML = '';
+    materials.forEach((material, index) => {
+        let div = document.createElement('div');
+        div.className = 'item-card';
+        div.innerHTML = `
+            <div class="card-header">
+                <span>${material.name}</span>
+                <div class="card-actions">
+                    <button class="icon-btn" onclick="editMaterial(${index})">✏️</button>
+                    <button class="icon-btn delete-btn" onclick="deleteMaterial(${index})">🗑️</button>
+                </div>
+            </div>
+            <div class="card-content">
+                <p><strong>سعر الشراء:</strong> ${material.buyPrice.toLocaleString()} دينار</p>
+                <p><strong>سعر البيع نقدًا:</strong> ${material.cashPrice.toLocaleString()} دينار</p>
+                <p><strong>قسط 10 أشهر:</strong> ${material.install10.toLocaleString()} دينار</p>
+                <p><strong>قسط 12 شهر:</strong> ${material.install12.toLocaleString()} دينار</p>
+            </div>
+        `;
+        materialsList.appendChild(div);
+    });
+}
+
+function showModal(options) {
     return new Promise((resolve) => {
-        const modal = document.getElementById('customModal');
-        const modalText = document.getElementById('modalText');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
         const modalInput = document.getElementById('modalInput');
         const modalButtons = document.getElementById('modalButtons');
 
-        modalText.innerText = typeof message === 'string' ? message : (message.title || '');
-        modalButtons.innerHTML = '';
+        modalTitle.innerText = options.title || '';
+        modalMessage.innerText = options.message || '';
         modalInput.style.display = 'none';
-        modalInput.value = defaultValue;
         modalInput.type = 'text';
+        modalInput.value = '';
+        modalButtons.innerHTML = '';
 
-        const closeAction = (val) => {
-            modal.classList.remove('active');
-            setTimeout(() => { 
-                const existingForm = document.getElementById('modalForm');
-                if(existingForm) existingForm.remove();
-                resolve(val); 
-            }, 300);
-        };
-
-        if (type === 'alert') {
-            const btn = document.createElement('button');
-            btn.className = 'btn-modal btn-modal-confirm';
-            btn.innerText = 'موافق (Enter)';
-            btn.onclick = () => closeAction(true);
-            modalButtons.appendChild(btn);
-
-            window.addEventListener('keydown', function onKey(e) {
-                if (e.key === 'Enter' && modal.classList.contains('active')) {
-                    window.removeEventListener('keydown', onKey);
-                    btn.click();
-                }
-            });
-        } 
-        else if (type === 'alert_with_print_receipt') {
+        if (options.type === 'alert') {
             const btnOk = document.createElement('button');
-            btnOk.className = 'btn-modal btn-modal-confirm';
-            btnOk.innerText = 'موافق (Enter)';
-            btnOk.onclick = () => closeAction(true);
+            btnOk.className = 'btn-modal btn-primary';
+            btnOk.innerText = 'حسناً';
+            btnOk.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(true);
+            };
+            modalButtons.appendChild(btnOk);
+        }
+        else if (options.type === 'confirm') {
+            const btnCancel = document.createElement('button');
+            btnCancel.className = 'btn-modal btn-secondary';
+            btnCancel.innerText = 'إلغاء';
+            btnCancel.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(false);
+            };
 
+            const btnOk = document.createElement('button');
+            btnOk.className = 'btn-modal btn-primary';
+            btnOk.innerText = 'تأكيد';
+            btnOk.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(true);
+            };
+
+            modalButtons.appendChild(btnCancel);
+            modalButtons.appendChild(btnOk);
+        }
+        else if (options.type === 'prompt') {
+            modalInput.style.display = 'block';
+            modalInput.placeholder = options.placeholder || '';
+            const btnCancel = document.createElement('button');
+            btnCancel.className = 'btn-modal btn-secondary';
+            btnCancel.innerText = 'إلغاء';
+            btnCancel.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(null);
+            };
+
+            const btnOk = document.createElement('button');
+            btnOk.className = 'btn-modal btn-primary';
+            btnOk.innerText = 'موافق';
+            btnOk.onclick = () => {
+                const val = modalInput.value.trim();
+                modalOverlay.style.display = 'none';
+                resolve(val);
+            };
+
+            modalButtons.appendChild(btnCancel);
+            modalButtons.appendChild(btnOk);
+        }
+        else if (options.type === 'password_prompt') {
+            modalInput.style.display = 'block';
+            modalInput.type = 'password';
+            modalInput.placeholder = 'أدخل كلمة المرور';
+            const btnOk = document.createElement('button');
+            btnOk.className = 'btn-modal btn-primary';
+            btnOk.innerText = 'دخول';
+            btnOk.onclick = () => {
+                const val = modalInput.value.trim();
+                modalOverlay.style.display = 'none';
+                resolve(val);
+            };
+            modalButtons.appendChild(btnOk);
+        }
+        else if (options.type === 'edit_customer') {
+            modalInput.style.display = 'block';
+            modalInput.placeholder = 'اسم الزبون الجديد';
+            modalInput.value = options.defaultValue || '';
+
+            const btnCancel = document.createElement('button');
+            btnCancel.className = 'btn-modal btn-secondary';
+            btnCancel.innerText = 'إلغاء';
+            btnCancel.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(null);
+            };
+
+            const btnSave = document.createElement('button');
+            btnSave.className = 'btn-modal btn-primary';
+            btnSave.innerText = 'حفظ';
+            btnSave.onclick = () => {
+                const val = modalInput.value.trim();
+                if (!val) return;
+                modalOverlay.style.display = 'none';
+                resolve(val);
+            };
+
+            modalButtons.appendChild(btnCancel);
+            modalButtons.appendChild(btnSave);
+        }
+        else if (options.type === 'alert_with_print_receipt') {
+            const btnClose = document.createElement('button');
+            btnClose.className = 'btn-modal btn-secondary';
+            btnClose.innerText = 'إغلاق';
+            btnClose.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(true);
+            };
             const btnPrint = document.createElement('button');
             btnPrint.className = 'btn-modal btn-primary';
             btnPrint.style.background = '#10b981';
@@ -200,503 +242,354 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
             btnPrint.onclick = () => {
                 printReceipt(extraData.customerName, extraData.amount, extraData.date, extraData.notes, extraData.remainingDebt);
             };
-
-            modalButtons.appendChild(btnOk);
+            modalButtons.appendChild(btnClose);
             modalButtons.appendChild(btnPrint);
-
-            window.addEventListener('keydown', function onKey(e) {
-                if (e.key === 'Enter' && modal.classList.contains('active')) {
-                    window.removeEventListener('keydown', onKey);
-                    btnOk.click();
-                }
-            });
         }
         else if (type === 'alert_with_print_statement') {
-            const btnOk = document.createElement('button');
-            btnOk.className = 'btn-modal btn-modal-confirm';
-            btnOk.innerText = 'موافق (Enter)';
-            btnOk.onclick = () => closeAction(true);
-
+            const btnClose = document.createElement('button');
+            btnClose.className = 'btn-modal btn-secondary';
+            btnClose.innerText = 'إغلاق';
+            btnClose.onclick = () => {
+                modalOverlay.style.display = 'none';
+                resolve(true);
+            };
             const btnPrint = document.createElement('button');
             btnPrint.className = 'btn-modal btn-primary';
             btnPrint.style.background = '#10b981';
             btnPrint.innerText = 'طباعة الكشف';
             btnPrint.onclick = () => {
-                let c = customers.find(c => c.id === extraData.customerId);
+                const c = customers.find(x => x.id === extraData.customerId);
                 printStatement(c);
             };
-
-            modalButtons.appendChild(btnOk);
+            modalButtons.appendChild(btnClose);
             modalButtons.appendChild(btnPrint);
-
-            window.addEventListener('keydown', function onKey(e) {
-                if (e.key === 'Enter' && modal.classList.contains('active')) {
-                    window.removeEventListener('keydown', onKey);
-                    btnOk.click();
-                }
-            });
-        }
-        else if (type === 'confirm') {
-            const btnYes = document.createElement('button');
-            btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'موافق (Enter)';
-            btnYes.onclick = () => closeAction(true);
-
-            const btnNo = document.createElement('button');
-            btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
-            btnNo.onclick = () => closeAction(false);
-
-            modalButtons.appendChild(btnYes);
-            modalButtons.appendChild(btnNo);
-
-            window.addEventListener('keydown', function onKey(e) {
-                if (e.key === 'Enter' && modal.classList.contains('active')) {
-                    window.removeEventListener('keydown', onKey);
-                    btnYes.click();
-                }
-            });
-        } 
-        else if (type === 'prompt') {
-            modalInput.style.display = 'block';
-            
-            const btnYes = document.createElement('button');
-            btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'حفظ (Enter)';
-            btnYes.onclick = () => closeAction(modalInput.value);
-
-            const btnNo = document.createElement('button');
-            btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
-            btnNo.onclick = () => closeAction(null);
-
-            modalButtons.appendChild(btnYes);
-            modalButtons.appendChild(btnNo);
-
-            modalInput.onkeydown = function(e) {
-                if (e.key === 'Enter') btnYes.click();
-            };
-
-            setTimeout(() => modalInput.focus(), 300);
-        }
-        else if (type === 'password_prompt') {
-            modalInput.style.display = 'block';
-            modalInput.type = 'password';
-            
-            const btnYes = document.createElement('button');
-            btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'تأكيد (Enter)';
-            btnYes.onclick = () => closeAction(modalInput.value);
-
-            const btnNo = document.createElement('button');
-            btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
-            btnNo.onclick = () => closeAction(null);
-
-            modalButtons.appendChild(btnYes);
-            modalButtons.appendChild(btnNo);
-
-            modalInput.onkeydown = function(e) {
-                if (e.key === 'Enter') btnYes.click();
-            };
-
-            setTimeout(() => modalInput.focus(), 300);
-        }
-        else if (type === 'form') {
-            const formContainer = document.createElement('div');
-            formContainer.id = 'modalForm';
-            
-            message.fields.forEach(f => {
-                if (f.type === 'select') {
-                    let optionsHtml = f.options.map(o => `<option value="${o.value}">${o.text}</option>`).join('');
-                    formContainer.innerHTML += `
-                        <div class="modal-form-group">
-                            <label>${f.label}</label>
-                            <select id="${f.id}">${optionsHtml}</select>
-                        </div>
-                    `;
-                } else {
-                    formContainer.innerHTML += `
-                        <div class="modal-form-group">
-                            <label>${f.label}</label>
-                            <input type="${f.type || 'text'}" id="${f.id}" ${f.readonly ? 'readonly' : ''} value="${f.value || ''}">
-                        </div>
-                    `;
-                }
-            });
-
-            modalText.innerText = message.title;
-            modalText.after(formContainer);
-
-            const btnYes = document.createElement('button');
-            btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'حفظ (Enter)';
-            btnYes.onclick = () => {
-                let results = {};
-                message.fields.forEach(f => { results[f.id] = document.getElementById(f.id).value; });
-                closeAction(results);
-            };
-
-            const btnNo = document.createElement('button');
-            btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
-            btnNo.onclick = () => closeAction(null);
-
-            modalButtons.appendChild(btnYes);
-            modalButtons.appendChild(btnNo);
-
-            formContainer.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') btnYes.click();
-            });
-
-            setTimeout(() => {
-                let firstInput = document.getElementById(message.fields[0].id);
-                if(firstInput && !firstInput.readOnly) firstInput.focus();
-            }, 300);
         }
 
-        modal.classList.add('active');
+        modalOverlay.style.display = 'flex';
+        modalInput.focus();
     });
 }
 
-async function customAlert(msg) { return await showModal({ type: 'alert', message: msg }); }
-async function customConfirm(msg) { return await showModal({ type: 'confirm', message: msg }); }
-async function customPrompt(msg, def = '') { return await showModal({ type: 'prompt', message: msg, defaultValue: def }); }
-
-window.switchPage = function(pageId, btnElement) {
-    document.querySelectorAll('.page-section').forEach(page => page.classList.remove('active'));
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(pageId).classList.add('active');
-    btnElement.classList.add('active');
-};
-
-function renderMaterials() {
-    const tbody = document.getElementById('materialsTableBody');
-    tbody.innerHTML = '';
-    materials.forEach(m => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${m.name}</td>
-                <td>${Number(m.buy).toLocaleString()} دينار</td>
-                <td>${Number(m.cash).toLocaleString()} دينار</td>
-                <td>${Number(m.p10).toLocaleString()} دينار</td>
-                <td>${Number(m.p12).toLocaleString()} دينار</td>
-                <td class="action-btns">
-                    <button class="btn btn-warning" onclick="editMaterial(${m.id})">تعديل</button>
-                    <button class="btn btn-danger" onclick="deleteMaterial(${m.id})">حذف</button>
-                </td>
-            </tr>
-        `;
+async function customAlert(message) {
+    return await showModal({
+        type: 'alert',
+        title: 'تنبيه',
+        message
+    });
+}
+async function customConfirm(message) {
+    return await showModal({
+        type: 'confirm',
+        title: 'تأكيد',
+        message
+    });
+}
+async function customPrompt(message, placeholder='') {
+    return await showModal({
+        type: 'prompt',
+        title: 'إدخال',
+        message,
+        placeholder
     });
 }
 
 window.addMaterial = async function() {
-    let name = await customPrompt("أدخل اسم المادة الجديدة:");
+    let name = document.getElementById('materialName').value.trim();
+    let buyPrice = parseFloat(document.getElementById('buyPrice').value);
+    let cashPrice = parseFloat(document.getElementById('cashPrice').value);
+    let install10 = parseFloat(document.getElementById('install10').value);
+    let install12 = parseFloat(document.getElementById('install12').value);
+
+    if (!name || isNaN(buyPrice) || isNaN(cashPrice) || isNaN(install10) || isNaN(install12)) {
+        await customAlert('يرجى ملء جميع الحقول الخاصة بالمواد');
+        return;
+    }
+
+    let material = {
+        id: Date.now(),
+        name,
+        buyPrice,
+        cashPrice,
+        install10,
+        install12
+    };
+    materials.push(material);
+    await saveLocalData();
+    await enqueueSync({ type: 'add', collection: 'materials', id: material.id, data: material });
+    renderMaterials();
+
+    document.getElementById('materialName').value = '';
+    document.getElementById('buyPrice').value = '';
+    document.getElementById('cashPrice').value = '';
+    document.getElementById('install10').value = '';
+    document.getElementById('install12').value = '';
+
+    await customAlert('تمت إضافة المادة بنجاح');
+};
+
+window.editMaterial = async function(index) {
+    let material = materials[index];
+    let name = await customPrompt('تعديل اسم المادة', material.name);
     if (!name) return;
-    let buy = await customPrompt("سعر الشراء (دينار):") || 0;
-    let cash = await customPrompt("سعر البيع نقداً (دينار):") || 0;
-    let p10 = await customPrompt("سعر القسط لـ 10 أشهر (دينار):") || 0;
-    let p12 = await customPrompt("سعر القسط لـ 12 شهر (دينار):") || 0;
-    
-    let newMat = { id: Date.now(), name, buy, cash, p10, p12 };
-    materials.push(newMat);
-    await saveLocalData();
-    addToSyncQueue({ type: 'ADD_MATERIAL', data: newMat });
-    
-    renderMaterials();
-    customAlert("تمت إضافة المادة بنجاح!");
-};
+    let buyPrice = await customPrompt('تعديل سعر الشراء', material.buyPrice);
+    let cashPrice = await customPrompt('تعديل سعر البيع نقدًا', material.cashPrice);
+    let install10 = await customPrompt('تعديل سعر 10 أشهر', material.install10);
+    let install12 = await customPrompt('تعديل سعر 12 شهر', material.install12);
 
-window.editMaterial = async function(id) {
-    let material = materials.find(m => m.id === id);
-    
-    let newName = await customPrompt("تعديل اسم المادة:", material.name);
-    if (newName === null) return;
-    
-    let newBuy = await customPrompt("تعديل سعر الشراء (دينار):", material.buy);
-    if (newBuy === null) return;
-    
-    let newCash = await customPrompt("تعديل البيع نقداً (دينار):", material.cash);
-    if (newCash === null) return;
-    
-    let newP10 = await customPrompt("تعديل قسط (10 أشهر) (دينار):", material.p10);
-    if (newP10 === null) return;
-    
-    let newP12 = await customPrompt("تعديل قسط (12 شهر) (دينار):", material.p12);
-    if (newP12 === null) return;
-
-    material.name = newName;
-    material.buy = newBuy;
-    material.cash = newCash;
-    material.p10 = newP10;
-    material.p12 = newP12;
+    material.name = name;
+    material.buyPrice = parseFloat(buyPrice);
+    material.cashPrice = parseFloat(cashPrice);
+    material.install10 = parseFloat(install10);
+    material.install12 = parseFloat(install12);
 
     await saveLocalData();
-    addToSyncQueue({ type: 'UPDATE_MATERIAL', data: material });
-
+    await enqueueSync({ type: 'update', collection: 'materials', id: material.id, data: material });
     renderMaterials();
-    customAlert("تم تعديل المادة بنجاح!");
+    await customAlert('تم تعديل المادة بنجاح');
 };
 
-window.deleteMaterial = async function(id) {
-    if (await customConfirm("هل أنت متأكد من حذف هذه المادة؟")) {
-        materials = materials.filter(m => m.id !== id);
+window.deleteMaterial = async function(index) {
+    if (await customConfirm('هل أنت متأكد من حذف هذه المادة؟')) {
+        let deleted = materials.splice(index, 1)[0];
         await saveLocalData();
-        addToSyncQueue({ type: 'DELETE_MATERIAL', data: { id } });
+        await enqueueSync({ type: 'delete', collection: 'materials', id: deleted.id });
         renderMaterials();
-        customAlert("تم الحذف بنجاح!");
+        await customAlert('تم حذف المادة بنجاح');
     }
 };
 
 function renderCustomers() {
-    const tbody = document.getElementById('customersTableBody');
-    tbody.innerHTML = '';
-    customers.forEach(c => {
-        let statusBadge = c.isLate ? '<span class="badge late">متأخر</span>' : '<span class="badge">منتظم</span>';
-        tbody.innerHTML += `
-            <tr>
-                <td>${c.name} ${statusBadge}</td>
-                <td>${c.phone}</td>
-                <td>${Number(c.totalDebt).toLocaleString()} دينار</td>
-                <td class="action-btns">
-                    <button class="btn btn-success" onclick="payInstallment(${c.id})">تسديد</button>
-                    <button class="btn btn-danger" onclick="addNewDebt(${c.id})">دين جديد</button>
-                    <button class="btn btn-warning" onclick="cancelInstallment(${c.id})">إلغاء التسديد</button>
-                </td>
-                <td class="action-btns" style="display: flex; flex-direction: column; gap: 8px;">
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-primary" onclick="showDetails(${c.id})">تفاصيل</button>
-                        <button class="btn btn-primary" onclick="showStatement(${c.id})">كشف حساب</button>
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-warning" onclick="editCustomer(${c.id})">تعديل</button>
-                        <button class="btn btn-danger" onclick="deleteCustomer(${c.id})">حذف الزبون</button>
-                    </div>
-                </td>
-            </tr>
+    let customersList = document.getElementById('customersList');
+    customersList.innerHTML = '';
+    customers.forEach((c, index) => {
+        let latestPayment = c.transactions.filter(t => t.type === 'تسديد').slice(-1)[0];
+        let totalPaid = c.transactions.filter(t => t.type === 'تسديد').reduce((sum, t) => sum + Number(t.amount), 0);
+        let card = document.createElement('div');
+        card.className = 'item-card';
+        card.innerHTML = `
+            <div class="card-header">
+                <span>${c.name}</span>
+                <div class="card-actions">
+                    <button class="icon-btn" onclick="editCustomer(${index})">✏️</button>
+                    <button class="icon-btn delete-btn" onclick="deleteCustomer(${index})">🗑️</button>
+                </div>
+            </div>
+            <div class="card-content">
+                <p><strong>رقم الهاتف:</strong> ${c.phone}</p>
+                <p><strong>الرصيد الكلي:</strong> ${Number(c.totalDebt).toLocaleString()} دينار</p>
+                <p><strong>المدفوع:</strong> ${totalPaid.toLocaleString()} دينار</p>
+                <p><strong>آخر تسديد:</strong> ${latestPayment ? latestPayment.date : 'لا يوجد'}</p>
+                <p><strong>ملاحظات:</strong> ${c.notes || '-'}</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                    <button class="btn btn-primary" onclick="addPayment(${c.id})">تسديد</button>
+                    <button class="btn btn-secondary" onclick="addDebt(${c.id})">دين جديد</button>
+                    <button class="btn btn-primary" onclick="showStatement(${c.id})">كشف حساب</button>
+                </div>
+            </div>
         `;
+        customersList.appendChild(card);
     });
 }
 
 window.addCustomer = async function() {
-    let res = await showModal({
-        type: 'form',
-        message: {
-            title: 'إضافة زبون جديد',
-            fields: [
-                {id: 'name', label: 'اسم الزبون'},
-                {id: 'notes', label: 'تفاصيل / ملاحظات'},
-                {id: 'date', type: 'date', label: 'التاريخ', value: new Date().toISOString().split('T')[0]}
-            ]
-        }
-    });
-    
-    if (!res || !res.name) return;
-    
-    let newCus = { 
-        id: Date.now(), 
-        name: res.name, 
-        phone: "-", 
-        notes: res.notes, 
-        date: res.date, 
-        totalDebt: 0, 
-        isLate: false, 
-        transactions: [] 
+    let name = document.getElementById('customerName').value.trim();
+    let totalDebt = parseFloat(document.getElementById('customerDebt').value);
+    let notes = document.getElementById('customerNotes').value.trim();
+
+    if (!name || isNaN(totalDebt)) {
+        await customAlert('يرجى ملء اسم الزبون والمبلغ');
+        return;
+    }
+
+    let customer = {
+        id: Date.now(),
+        name,
+        phone: '-',
+        totalDebt,
+        notes,
+        isLate: false,
+        transactions: [
+            {
+                type: 'دين أولي',
+                amount: totalDebt,
+                date: new Date().toISOString().split('T')[0],
+                notes: notes || ''
+            }
+        ]
     };
-    customers.push(newCus);
+
+    customers.push(customer);
     await saveLocalData();
-    addToSyncQueue({ type: 'ADD_CUSTOMER', data: newCus });
-    
+    await enqueueSync({ type: 'add', collection: 'customers', id: customer.id, data: customer });
     renderCustomers();
-    customAlert("تمت إضافة الزبون بنجاح!");
+
+    document.getElementById('customerName').value = '';
+    document.getElementById('customerDebt').value = '';
+    document.getElementById('customerNotes').value = '';
+
+    await customAlert('تمت إضافة الزبون بنجاح');
 };
 
-window.editCustomer = async function(id) {
-    let customer = customers.find(c => c.id === id);
-    let newName = await customPrompt("تعديل اسم الزبون:", customer.name);
-    if (newName) {
-        customer.name = newName;
-        await saveLocalData();
-        addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
-        renderCustomers();
-        customAlert("تم تعديل بيانات الزبون بنجاح!");
-    }
-};
-
-window.deleteCustomer = async function(id) {
-    let pass = await showModal({ type: 'password_prompt', message: '' });
-    if (pass === "1993") {
-        customers = customers.filter(c => c.id !== id);
-        await saveLocalData();
-        addToSyncQueue({ type: 'DELETE_CUSTOMER', data: { id } });
-        renderCustomers();
-        customAlert("تم حذف الزبون بنجاح!");
-    } else if (pass !== null) {
-        customAlert("رمز خاطئ!");
-    }
-};
-
-window.payInstallment = async function(id) {
-    let customer = customers.find(c => c.id === id);
-    
-    let res = await showModal({
-        type: 'form',
-        message: {
-            title: 'تسديد دفعة',
-            fields: [
-                {id: 'total', label: 'المبلغ الكلي', value: customer.totalDebt, readonly: true},
-                {id: 'amount', label: 'مبلغ التسديد', type: 'number'},
-                {id: 'date', label: 'التاريخ', type: 'date', value: new Date().toISOString().split('T')[0]},
-                {id: 'notes', label: 'ملاحظات'}
-            ]
-        }
+window.editCustomer = async function(index) {
+    const customer = customers[index];
+    const newName = await showModal({
+        type: 'edit_customer',
+        title: 'تعديل اسم الزبون',
+        message: '',
+        defaultValue: customer.name
     });
-    
-    if (!res || !res.amount) return;
 
-    let payAmount = Number(res.amount);
-    customer.totalDebt -= payAmount;
-    customer.transactions.push({ type: 'تسديد', amount: payAmount, date: res.date, notes: res.notes });
-    customer.isLate = false;
-    
+    if (newName && newName.trim() !== '') {
+        customer.name = newName.trim();
+        await saveLocalData();
+        await enqueueSync({ type: 'update', collection: 'customers', id: customer.id, data: customer });
+        renderCustomers();
+        await customAlert("تم تعديل اسم الزبون بنجاح.");
+    }
+};
+
+window.deleteCustomer = async function(index) {
+    let pass = await showModal({
+        type: 'password_prompt',
+        title: 'حذف الزبون',
+        message: ''
+    });
+
+    if (pass !== "1993") {
+        await customAlert("كلمة المرور غير صحيحة، لا يمكن حذف الزبون.");
+        return;
+    }
+
+    if (await customConfirm('هل أنت متأكد من حذف الزبون وجميع حركاته؟')) {
+        let deleted = customers.splice(index, 1)[0];
+        await saveLocalData();
+        await enqueueSync({ type: 'delete', collection: 'customers', id: deleted.id });
+        renderCustomers();
+        await customAlert('تم حذف الزبون بنجاح');
+    }
+};
+
+window.addPayment = async function(customerId) {
+    let customer = customers.find(c => c.id === customerId);
+    let amount = parseFloat(await customPrompt(`أدخل مبلغ التسديد للزبون: ${customer.name}`));
+    if (isNaN(amount) || amount <= 0) return;
+
+    let notes = await customPrompt('ملاحظات التسديد (اختياري)');
+    let date = new Date().toISOString().split('T')[0];
+
+    customer.totalDebt -= amount;
+    if (customer.totalDebt < 0) customer.totalDebt = 0;
+    customer.transactions.push({
+        type: 'تسديد',
+        amount,
+        date,
+        notes: notes || ''
+    });
+
     await saveLocalData();
-    addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
-
+    await enqueueSync({ type: 'update', collection: 'customers', id: customer.id, data: customer });
     renderCustomers();
-    
+
     await showModal({
         type: 'alert_with_print_receipt',
-        message: `تم تسديد مبلغ ${payAmount.toLocaleString()} دينار للزبون ${customer.name} بنجاح!`,
+        title: 'تمت عملية التسديد بنجاح',
+        message: `تم تسديد مبلغ ${amount.toLocaleString()} دينار للزبون ${customer.name}`,
         extraData: {
             customerName: customer.name,
-            amount: payAmount,
-            date: res.date,
-            notes: res.notes,
+            amount: amount,
+            date: date,
+            notes: notes || 'لا توجد',
             remainingDebt: customer.totalDebt
         }
     });
 };
 
-window.addNewDebt = async function(id) {
-    let customer = customers.find(c => c.id === id);
-    
-    let res = await showModal({
-        type: 'form',
-        message: {
-            title: 'إضافة دين جديد',
-            fields: [
-                {id: 'amount', label: 'المبلغ', type: 'number'},
-                {id: 'details', label: 'التفاصيل / ملاحظات'}
-            ]
-        }
+window.addDebt = async function(customerId) {
+    let customer = customers.find(c => c.id === customerId);
+    let amount = parseFloat(await customPrompt(`أدخل مبلغ الدين الجديد للزبون: ${customer.name}`));
+    if (isNaN(amount) || amount <= 0) return;
+
+    let notes = await customPrompt('ملاحظات الدين الجديد (اختياري)');
+    let date = new Date().toISOString().split('T')[0];
+
+    customer.totalDebt += amount;
+    customer.transactions.push({
+        type: 'دين جديد',
+        amount,
+        date,
+        notes: notes || ''
     });
-    
-    if (!res || !res.amount) return;
 
-    let debtAmount = Number(res.amount);
-    customer.totalDebt += debtAmount;
-    let today = new Date().toISOString().split('T')[0];
-    customer.transactions.push({ type: 'دين جديد', amount: debtAmount, date: today, notes: res.details });
-    
     await saveLocalData();
-    addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
-
+    await enqueueSync({ type: 'update', collection: 'customers', id: customer.id, data: customer });
     renderCustomers();
-    customAlert(`تمت إضافة دين بقيمة ${debtAmount.toLocaleString()} دينار للزبون ${customer.name} بنجاح!`);
+    await customAlert(`تمت إضافة دين جديد بقيمة ${amount.toLocaleString()} دينار للزبون ${customer.name}`);
 };
 
-window.showDetails = async function(id) {
-    let customer = customers.find(c => c.id === id);
-    let detailsText = customer.transactions.map(t => `📅 التاريخ: ${t.date}\nالنوع: ${t.type}\nالمبلغ: ${Number(t.amount).toLocaleString()} دينار\nالتفاصيل: ${t.notes}`).join('\n-----------------\n');
-    let msg = `تفاصيل الزبون: ${customer.name}\n\nفهرس وتفاصيل الحركات:\n\n${detailsText || 'لا توجد تفاصيل حالياً'}`;
-    
+window.showStatement = async function(customerId) {
+    let customer = customers.find(c => c.id === customerId);
+    let transText = customer.transactions.map((t, idx) => {
+        return `${idx + 1}- [${t.date}] ${t.type}: ${Number(t.amount).toLocaleString()} دينار${t.notes ? ' - ملاحظات: ' + t.notes : ''}`;
+    }).join('\n');
+
+    let msg = `كشف حساب الزبون:\n\nالاسم: ${customer.name}\nرقم الهاتف: ${customer.phone}\nالرصيد الكلي المتبقي: ${Number(customer.totalDebt).toLocaleString()} دينار\n\nسجل العمليات:\n${transText || 'لا توجد عمليات مسجلة'}`;
+
     await showModal({
         type: 'alert_with_print_statement',
+        title: 'كشف حساب',
         message: msg,
-        extraData: { customerId: id }
+        extraData: {
+            customerId: customer.id
+        }
     });
 };
 
-window.cancelInstallment = async function(id) {
-    let customer = customers.find(c => c.id === id);
-    let payments = customer.transactions.filter(t => t.type === 'تسديد');
-    
-    if (payments.length === 0) {
-        await customAlert("لا يوجد تسديدات سابقة لإلغائها.");
+window.reversePayment = async function(customerId, transactionIndex) {
+    let customer = customers.find(c => c.id === customerId);
+    let transaction = customer.transactions[transactionIndex];
+    if (!transaction || transaction.type !== 'تسديد') {
+        await customAlert("لا يمكن إلغاء هذه العملية.");
         return;
     }
 
-    let res = await showModal({
-        type: 'form',
-        message: {
-            title: 'إلغاء التسديد',
-            fields: [
-                {
-                    id: 'paymentToCancel', 
-                    label: 'الأشهر المسددة (اختر للإلغاء)', 
-                    type: 'select', 
-                    options: payments.map((p, index) => ({value: index, text: `تاريخ: ${p.date} - مبلغ: ${Number(p.amount).toLocaleString()} دينار`}))
-                }
-            ]
-        }
-    });
-    
-    if (res && res.paymentToCancel !== null && res.paymentToCancel !== "") {
-        let pIndex = Number(res.paymentToCancel);
-        let payment = payments[pIndex];
-        
-        customer.totalDebt += payment.amount;
-        
-        let exactIndex = customer.transactions.indexOf(payment);
-        if(exactIndex > -1) {
-            customer.transactions.splice(exactIndex, 1);
-        }
-        
-        await saveLocalData();
-        addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
+    if (await customConfirm(`هل تريد إلغاء تسديد بقيمة ${Number(transaction.amount).toLocaleString()} دينار للزبون ${customer.name}؟`)) {
+        customer.totalDebt += Number(transaction.amount);
+        customer.transactions.splice(transactionIndex, 1);
 
+        await saveLocalData();
+        await enqueueSync({ type: 'update', collection: 'customers', id: customer.id, data: customer });
         renderCustomers();
-        customAlert("تم إلغاء التسديد وإرجاع المبلغ للرصيد بنجاح!");
+        await customAlert("تم إلغاء التسديد بنجاح.");
     }
 };
 
-window.showStatement = async function(id) {
-    let customer = customers.find(c => c.id === id);
-    let transText = customer.transactions.filter(t => t.type !== 'تسديد').map(t => `📅 ${t.date} | ${t.type}: ${Number(t.amount).toLocaleString()} | ملاحظات: ${t.notes}`).join('\n');
-    let msg = `كشف حساب الزبون:\n\nالاسم: ${customer.name}\nرقم الهاتف: ${customer.phone}\nالرصيد الكلي المتبقي: ${Number(customer.totalDebt).toLocaleString()} دينار\n\nسجل العمليات:\n${transText || 'لا توجد عمليات مسجلة'}`;
-    
-    await showModal({
-        type: 'alert_with_print_statement',
-        message: msg,
-        extraData: { customerId: id }
-    });
-};
-
 window.showLateCustomers = async function() {
-    let lateList = customers.filter(c => c.isLate).map(c => c.name).join("\n- ");
-    if (lateList) {
-        await customAlert("قائمة الزبائن المتأخرين:\n\n- " + lateList);
+    let lateCustomers = customers.filter(c => c.isLate);
+    if (lateCustomers.length > 0) {
+        let msg = lateCustomers.map(c =>
+            `- ${c.name} | الرصيد: ${Number(c.totalDebt).toLocaleString()} دينار`
+        ).join('\n');
+        await customAlert(`الزبائن المتأخرون:\n\n${msg}`);
     } else {
         await customAlert("لا يوجد زبائن متأخرين حالياً.");
     }
 };
 
-window.printData = function(title, contentHTML) {
+window.printData = function(title, contentHTML, customStyles = '', bodyClass = '') {
     let printWindow = window.open('', '', 'height=600,width=800');
     printWindow.document.write('<html lang="ar" dir="rtl"><head><title>' + title + '</title>');
-    printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">');
+    printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">');
     printWindow.document.write('<style>');
-    printWindow.document.write('body{font-family:"Tajawal",sans-serif; padding:20px; text-align:right;}');
+    printWindow.document.write('body{font-family:"Tajawal",sans-serif; padding:20px; text-align:right; margin:0;}');
     printWindow.document.write('table{width:100%;border-collapse:collapse;margin-top:20px;}');
     printWindow.document.write('th,td{border:1px solid #ddd;padding:10px;text-align:right;}');
     printWindow.document.write('th{background-color:#f2f2f2;}');
     printWindow.document.write('.header{text-align:center;margin-bottom:20px;border-bottom:2px solid #000;padding-bottom:10px;}');
     printWindow.document.write('.footer{margin-top:40px; text-align:center; font-weight:bold;}');
+    printWindow.document.write(customStyles || '');
     printWindow.document.write('</style>');
-    printWindow.document.write('</head><body>');
-    printWindow.document.write('<div class="header"><h2>' + title + '</h2></div>');
+    printWindow.document.write('</head><body class="' + bodyClass + '">');
     printWindow.document.write(contentHTML);
-    printWindow.document.write('<div class="footer"><p>نظام إدارة المواد والأقساط</p></div>');
     printWindow.document.write('</body></html>');
     printWindow.document.close();
     printWindow.focus();
@@ -707,25 +600,84 @@ window.printData = function(title, contentHTML) {
 };
 
 window.printReceipt = function(customerName, amount, date, notes, remainingDebt) {
-    let content = `
-        <p><strong>اسم الزبون:</strong> ${customerName}</p>
-        <p><strong>تاريخ التسديد:</strong> ${date}</p>
-        <p><strong>المبلغ المسدد:</strong> ${Number(amount).toLocaleString()} دينار</p>
-        <p><strong>الرصيد المتبقي:</strong> ${Number(remainingDebt).toLocaleString()} دينار</p>
-        <p><strong>ملاحظات:</strong> ${notes || 'لا توجد'}</p>
-        <br>
-        <div style="display:flex; justify-content:space-around; margin-top:30px;">
-            <div>
-                <p style="font-weight:bold;">توقيع المستلم</p>
-                <p>.........................</p>
-            </div>
-            <div>
-                <p style="font-weight:bold;">توقيع الزبون</p>
-                <p>.........................</p>
+    const receiptNo = String(Date.now()).slice(-4);
+    const now = new Date();
+    const timeText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+    const content = `
+        <div class="receipt-wrap">
+            <div class="receipt-box">
+                <div class="shop-box">
+                    <div class="shop-name">مجمع كامل فون للتقسيط</div>
+                    <div class="shop-desc">اجهزة كهربائية - اثاث منزلية - موبايلات</div>
+                    <div class="shop-phones">
+                        <span>0773 676 1213</span>
+                        <span>0781 800 7750</span>
+                    </div>
+                </div>
+
+                <div class="meta-row">
+                    <div>تاريخ: <span>${date}</span></div>
+                    <div>رقم الوصل <span>${receiptNo}</span></div>
+                </div>
+
+                <div class="customer-pill">اسم الزبون ${customerName}</div>
+
+                <div class="notes-title">الملاحظات</div>
+
+                <table class="receipt-table">
+                    <thead>
+                        <tr>
+                            <th class="row-label"></th>
+                            <th>دينار</th>
+                            <th>دولار</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="row-label">الدين</td>
+                            <td>${Number(Number(remainingDebt) + Number(amount)).toLocaleString()}</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="row-label">الواصل</td>
+                            <td>${Number(amount).toLocaleString()}</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td class="row-label">المتبقي</td>
+                            <td>${Number(remainingDebt).toLocaleString()}</td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="receiver-line">المستلم: ................................</div>
+                <div class="receipt-datetime">${date} ${timeText}</div>
             </div>
         </div>
     `;
-    printData('وصل تسديد', content);
+    const styles = `
+        @page { size: auto; margin: 8mm; }
+        body.receipt-body{padding:0;background:#fff;text-align:center;}
+        .receipt-wrap{display:flex;justify-content:center;align-items:flex-start;padding:0;margin:0;}
+        .receipt-box{width:78mm;color:#111;padding:6mm 4mm 4mm 4mm;box-sizing:border-box;font-size:15px;line-height:1.35;}
+        .shop-box{border:1px solid #777;padding:10px 8px 8px;margin-bottom:14px;}
+        .shop-name{font-size:24px;font-weight:800;line-height:1.3;margin-bottom:4px;}
+        .shop-desc{font-size:15px;font-weight:500;margin-bottom:10px;}
+        .shop-phones{display:flex;justify-content:space-between;gap:8px;font-size:15px;direction:ltr;}
+        .meta-row{display:flex;justify-content:space-between;align-items:center;font-size:15px;margin-bottom:12px;}
+        .customer-pill{border:1px solid #777;border-radius:14px;padding:7px 10px;margin-bottom:12px;font-size:15px;font-weight:500;text-align:right;}
+        .notes-title{font-size:16px;font-weight:700;text-align:right;margin-bottom:8px;}
+        .receipt-table{width:100%;border-collapse:separate;border-spacing:0 8px;margin-top:0;direction:rtl;}
+        .receipt-table th,.receipt-table td{border:1px solid #777;padding:9px 8px;text-align:center;font-size:15px;background:#fff;}
+        .receipt-table thead th{background:#fff;border:none;padding:0 8px 6px;font-weight:700;}
+        .receipt-table thead .row-label{border:none;}
+        .receipt-table tbody td{border-radius:12px;}
+        .receipt-table .row-label{width:24%;font-weight:700;}
+        .receiver-line{margin-top:12px;text-align:right;font-size:15px;font-weight:700;}
+        .receipt-datetime{margin-top:14px;text-align:center;font-size:14px;letter-spacing:1px;direction:ltr;}
+    `;
+    printData('وصل تسديد', content, styles, 'receipt-body');
 };
 
 window.printStatement = function(customer) {
@@ -758,12 +710,21 @@ window.onload = async function() {
     while(true) {
         let pass = await showModal({ type: 'password_prompt', message: '' });
         if (pass === "1991") {
-            document.querySelector('.sidebar').style.display = 'flex';
-            document.querySelector('.main-content').style.display = 'block';
-            await loadLocalData();
             break;
-        } else if (pass !== null) {
-            await customAlert("رمز خاطئ!");
+        } else {
+            await customAlert("كلمة المرور غير صحيحة");
         }
+    }
+
+    document.querySelector('.sidebar').style.display = 'flex';
+    document.querySelector('.main-content').style.display = 'block';
+
+    await loadLocalData();
+    renderMaterials();
+    renderCustomers();
+    await syncData();
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
     }
 };
