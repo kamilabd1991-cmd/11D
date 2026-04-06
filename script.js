@@ -158,7 +158,7 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
         const modalInput = document.getElementById('modalInput');
         const modalButtons = document.getElementById('modalButtons');
 
-        modalText.innerText = typeof message === 'string' ? message : (message.title || '');
+        modalText.innerHTML = typeof message === 'string' ? message : (message.title || '');
         modalButtons.innerHTML = '';
         modalInput.style.display = 'none';
         modalInput.value = defaultValue;
@@ -176,7 +176,7 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
         if (type === 'alert') {
             const btn = document.createElement('button');
             btn.className = 'btn-modal btn-modal-confirm';
-            btn.innerText = 'موافق (Enter)';
+            btn.innerHTML = '<i class="fas fa-check"></i> موافق (Enter)';
             btn.onclick = () => closeAction(true);
             modalButtons.appendChild(btn);
 
@@ -190,13 +190,13 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
         else if (type === 'alert_with_print_receipt') {
             const btnOk = document.createElement('button');
             btnOk.className = 'btn-modal btn-modal-confirm';
-            btnOk.innerText = 'موافق (Enter)';
+            btnOk.innerHTML = '<i class="fas fa-check"></i> موافق (Enter)';
             btnOk.onclick = () => closeAction(true);
 
             const btnPrint = document.createElement('button');
             btnPrint.className = 'btn-modal btn-primary';
             btnPrint.style.background = '#10b981';
-            btnPrint.innerText = 'طباعة الوصل';
+            btnPrint.innerHTML = '<i class="fas fa-print"></i> طباعة الوصل';
             btnPrint.onclick = () => {
                 printReceipt(extraData.customerName, extraData.amount, extraData.date, extraData.notes, extraData.remainingDebt);
             };
@@ -214,13 +214,13 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
         else if (type === 'alert_with_print_statement') {
             const btnOk = document.createElement('button');
             btnOk.className = 'btn-modal btn-modal-confirm';
-            btnOk.innerText = 'موافق (Enter)';
+            btnOk.innerHTML = '<i class="fas fa-times"></i> إغلاق';
             btnOk.onclick = () => closeAction(true);
 
             const btnPrint = document.createElement('button');
             btnPrint.className = 'btn-modal btn-primary';
             btnPrint.style.background = '#10b981';
-            btnPrint.innerText = 'طباعة الكشف';
+            btnPrint.innerHTML = '<i class="fas fa-print"></i> طباعة الكشف';
             btnPrint.onclick = () => {
                 let c = customers.find(c => c.id === extraData.customerId);
                 printStatement(c);
@@ -228,23 +228,16 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
 
             modalButtons.appendChild(btnOk);
             modalButtons.appendChild(btnPrint);
-
-            window.addEventListener('keydown', function onKey(e) {
-                if (e.key === 'Enter' && modal.classList.contains('active')) {
-                    window.removeEventListener('keydown', onKey);
-                    btnOk.click();
-                }
-            });
         }
         else if (type === 'confirm') {
             const btnYes = document.createElement('button');
             btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'موافق (Enter)';
+            btnYes.innerHTML = '<i class="fas fa-check"></i> موافق (Enter)';
             btnYes.onclick = () => closeAction(true);
 
             const btnNo = document.createElement('button');
             btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
+            btnNo.innerHTML = '<i class="fas fa-times"></i> إلغاء';
             btnNo.onclick = () => closeAction(false);
 
             modalButtons.appendChild(btnYes);
@@ -262,12 +255,12 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
             
             const btnYes = document.createElement('button');
             btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'حفظ (Enter)';
+            btnYes.innerHTML = '<i class="fas fa-save"></i> حفظ (Enter)';
             btnYes.onclick = () => closeAction(modalInput.value);
 
             const btnNo = document.createElement('button');
             btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
+            btnNo.innerHTML = '<i class="fas fa-times"></i> إلغاء';
             btnNo.onclick = () => closeAction(null);
 
             modalButtons.appendChild(btnYes);
@@ -285,12 +278,12 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
             
             const btnYes = document.createElement('button');
             btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'تأكيد (Enter)';
+            btnYes.innerHTML = '<i class="fas fa-unlock"></i> تأكيد (Enter)';
             btnYes.onclick = () => closeAction(modalInput.value);
 
             const btnNo = document.createElement('button');
             btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
+            btnNo.innerHTML = '<i class="fas fa-times"></i> إلغاء';
             btnNo.onclick = () => closeAction(null);
 
             modalButtons.appendChild(btnYes);
@@ -325,12 +318,12 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
                 }
             });
 
-            modalText.innerText = message.title;
+            modalText.innerHTML = message.title;
             modalText.after(formContainer);
 
             const btnYes = document.createElement('button');
             btnYes.className = 'btn-modal btn-modal-confirm';
-            btnYes.innerText = 'حفظ (Enter)';
+            btnYes.innerHTML = '<i class="fas fa-save"></i> حفظ (Enter)';
             btnYes.onclick = () => {
                 let results = {};
                 message.fields.forEach(f => { results[f.id] = document.getElementById(f.id).value; });
@@ -339,7 +332,7 @@ function showModal({ type, message, defaultValue = '', extraData = null }) {
 
             const btnNo = document.createElement('button');
             btnNo.className = 'btn-modal btn-modal-cancel';
-            btnNo.innerText = 'إلغاء';
+            btnNo.innerHTML = '<i class="fas fa-times"></i> إلغاء';
             btnNo.onclick = () => closeAction(null);
 
             modalButtons.appendChild(btnYes);
@@ -382,8 +375,8 @@ function renderMaterials() {
                 <td>${Number(m.p10).toLocaleString()} دينار</td>
                 <td>${Number(m.p12).toLocaleString()} دينار</td>
                 <td class="action-btns">
-                    <button class="btn btn-warning" onclick="editMaterial(${m.id})">تعديل</button>
-                    <button class="btn btn-danger" onclick="deleteMaterial(${m.id})">حذف</button>
+                    <button class="btn btn-warning" onclick="editMaterial(${m.id})"><i class="fas fa-edit"></i> تعديل</button>
+                    <button class="btn btn-danger" onclick="deleteMaterial(${m.id})"><i class="fas fa-trash"></i> حذف</button>
                 </td>
             </tr>
         `;
@@ -395,7 +388,7 @@ window.filterMaterials = function() {
     let rows = document.getElementById('materialsTableBody').getElementsByTagName('tr');
     for (let i = 0; i < rows.length; i++) {
         let name = rows[i].getElementsByTagName('td')[0].innerText.toLowerCase();
-        rows[i].style.display = name.includes(input) ? "" : "none";
+        rows[i].style.display = name.startsWith(input) ? "" : "none";
     }
 };
 
@@ -404,7 +397,7 @@ window.filterCustomers = function() {
     let rows = document.getElementById('customersTableBody').getElementsByTagName('tr');
     for (let i = 0; i < rows.length; i++) {
         let name = rows[i].getElementsByTagName('td')[0].innerText.toLowerCase();
-        rows[i].style.display = name.includes(input) ? "" : "none";
+        rows[i].style.display = name.startsWith(input) ? "" : "none";
     }
 };
 
@@ -457,12 +450,15 @@ window.editMaterial = async function(id) {
 };
 
 window.deleteMaterial = async function(id) {
-    if (await customConfirm("هل أنت متأكد من حذف هذه المادة؟")) {
+    let pass = await showModal({ type: 'password_prompt', message: 'أدخل الرمز لتأكيد حذف المادة:' });
+    if (pass === "1993") {
         materials = materials.filter(m => m.id !== id);
         await saveLocalData();
         addToSyncQueue({ type: 'DELETE_MATERIAL', data: { id } });
         renderMaterials();
         customAlert("تم الحذف بنجاح!");
+    } else if (pass !== null) {
+        customAlert("رمز خاطئ!");
     }
 };
 
@@ -477,18 +473,18 @@ function renderCustomers() {
                 <td>${c.phone}</td>
                 <td>${Number(c.totalDebt).toLocaleString()} دينار</td>
                 <td class="action-btns">
-                    <button class="btn btn-success" onclick="payInstallment(${c.id})">تسديد</button>
-                    <button class="btn btn-danger" onclick="addNewDebt(${c.id})">دين جديد</button>
-                    <button class="btn btn-warning" onclick="cancelInstallment(${c.id})">إلغاء التسديد</button>
+                    <button class="btn btn-success" onclick="payInstallment(${c.id})"><i class="fas fa-hand-holding-usd"></i> تسديد</button>
+                    <button class="btn btn-danger" onclick="addNewDebt(${c.id})"><i class="fas fa-cart-plus"></i> دين جديد</button>
+                    <button class="btn btn-warning" onclick="cancelInstallment(${c.id})"><i class="fas fa-undo"></i> إلغاء التسديد</button>
                 </td>
                 <td class="action-btns" style="display: flex; flex-direction: column; gap: 8px;">
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-primary" onclick="showDetails(${c.id})">تفاصيل</button>
-                        <button class="btn btn-primary" onclick="showStatement(${c.id})">كشف حساب</button>
+                        <button class="btn btn-primary" onclick="showDetails(${c.id})"><i class="fas fa-list-alt"></i> تفاصيل</button>
+                        <button class="btn btn-primary" onclick="showStatement(${c.id})"><i class="fas fa-file-invoice"></i> كشف حساب</button>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-warning" onclick="editCustomer(${c.id})">تعديل</button>
-                        <button class="btn btn-danger" onclick="deleteCustomer(${c.id})">حذف الزبون</button>
+                        <button class="btn btn-warning" onclick="editCustomer(${c.id})"><i class="fas fa-user-edit"></i> تعديل</button>
+                        <button class="btn btn-danger" onclick="deleteCustomer(${c.id})"><i class="fas fa-trash-alt"></i> حذف الزبون</button>
                     </div>
                 </td>
             </tr>
@@ -542,7 +538,7 @@ window.editCustomer = async function(id) {
 };
 
 window.deleteCustomer = async function(id) {
-    let pass = await showModal({ type: 'password_prompt', message: '' });
+    let pass = await showModal({ type: 'password_prompt', message: 'أدخل رمز الحذف:' });
     if (pass === "1993") {
         customers = customers.filter(c => c.id !== id);
         await saveLocalData();
@@ -623,10 +619,81 @@ window.addNewDebt = async function(id) {
     customAlert(`تمت إضافة دين بقيمة ${debtAmount.toLocaleString()} دينار للزبون ${customer.name} بنجاح!`);
 };
 
+window.editTransaction = async function(custId, transIndex) {
+    let customer = customers.find(c => c.id === custId);
+    let t = customer.transactions[transIndex];
+    
+    let newAmountStr = await customPrompt(`تعديل المبلغ للعملية (${t.type}):`, t.amount);
+    if(newAmountStr === null || newAmountStr === "") return;
+    
+    let newAmount = Number(newAmountStr);
+    let diff = newAmount - t.amount;
+    
+    if(t.type === 'تسديد') {
+        customer.totalDebt -= diff;
+    } else {
+        customer.totalDebt += diff;
+    }
+    
+    t.amount = newAmount;
+    
+    await saveLocalData();
+    addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
+    renderCustomers();
+    
+    // إعادة فتح النافذة لتحديث البيانات
+    showDetails(custId);
+};
+
+window.deleteTransaction = async function(custId, transIndex) {
+    let pass = await showModal({ type: 'password_prompt', message: 'أدخل الرمز لتأكيد حذف المعاملة:' });
+    if (pass !== "1993") {
+        if (pass !== null) customAlert("رمز خاطئ!");
+        return;
+    }
+
+    let customer = customers.find(c => c.id === custId);
+    let t = customer.transactions[transIndex];
+    
+    if(t.type === 'تسديد') {
+        customer.totalDebt += t.amount;
+    } else {
+        customer.totalDebt -= t.amount;
+    }
+    
+    customer.transactions.splice(transIndex, 1);
+    
+    await saveLocalData();
+    addToSyncQueue({ type: 'UPDATE_CUSTOMER', data: customer });
+    renderCustomers();
+    
+    // إعادة فتح النافذة لتحديث البيانات
+    showDetails(custId);
+};
+
 window.showDetails = async function(id) {
     let customer = customers.find(c => c.id === id);
-    let detailsText = customer.transactions.map(t => `📅 التاريخ: ${t.date}\nالنوع: ${t.type}\nالمبلغ: ${Number(t.amount).toLocaleString()} دينار\nالتفاصيل: ${t.notes}`).join('\n-----------------\n');
-    let msg = `تفاصيل الزبون: ${customer.name}\n\nفهرس وتفاصيل الحركات:\n\n${detailsText || 'لا توجد تفاصيل حالياً'}`;
+    let detailsText = customer.transactions.map((t, index) => `
+        <div style="border-bottom: 2px dashed rgba(255,255,255,0.4); padding: 15px 0; text-align: right;">
+            <p>📅 التاريخ: ${t.date}</p>
+            <p>النوع: ${t.type}</p>
+            <p>المبلغ: ${Number(t.amount).toLocaleString()} دينار</p>
+            <p>التفاصيل: ${t.notes}</p>
+            <div style="margin-top: 10px; display: flex; gap: 10px;">
+                <button class="btn btn-warning" onclick="editTransaction(${id}, ${index})"><i class="fas fa-edit"></i> تعديل</button>
+                <button class="btn btn-danger" onclick="deleteTransaction(${id}, ${index})"><i class="fas fa-trash"></i> حذف</button>
+            </div>
+        </div>
+    `).join('');
+    
+    let msg = `
+        <div style="max-height: 400px; overflow-y: auto; padding-left: 10px;">
+            <h3 style="margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px;">
+                تفاصيل الزبون: ${customer.name}
+            </h3>
+            ${detailsText || '<p style="text-align:center;">لا توجد تفاصيل حالياً</p>'}
+        </div>
+    `;
     
     await showModal({
         type: 'alert_with_print_statement',
@@ -680,8 +747,19 @@ window.cancelInstallment = async function(id) {
 
 window.showStatement = async function(id) {
     let customer = customers.find(c => c.id === id);
-    let transText = customer.transactions.filter(t => t.type !== 'تسديد').map(t => `📅 ${t.date} | ${t.type}: ${Number(t.amount).toLocaleString()} | ملاحظات: ${t.notes}`).join('\n');
-    let msg = `كشف حساب الزبون:\n\nالاسم: ${customer.name}\nرقم الهاتف: ${customer.phone}\nالرصيد الكلي المتبقي: ${Number(customer.totalDebt).toLocaleString()} دينار\n\nسجل العمليات:\n${transText || 'لا توجد عمليات مسجلة'}`;
+    let transText = customer.transactions.filter(t => t.type !== 'تسديد').map(t => `📅 ${t.date} | ${t.type}: ${Number(t.amount).toLocaleString()} | ملاحظات: ${t.notes}`).join('<br>');
+    let msg = `
+        <div style="text-align: right; line-height: 1.8;">
+            <p><strong>الاسم:</strong> ${customer.name}</p>
+            <p><strong>رقم الهاتف:</strong> ${customer.phone}</p>
+            <p><strong>الرصيد الكلي المتبقي:</strong> ${Number(customer.totalDebt).toLocaleString()} دينار</p>
+            <hr style="border-color: rgba(255,255,255,0.2); margin: 15px 0;">
+            <p><strong>سجل العمليات:</strong></p>
+            <div style="font-size: 0.95rem; max-height: 200px; overflow-y: auto;">
+                ${transText || 'لا توجد عمليات مسجلة'}
+            </div>
+        </div>
+    `;
     
     await showModal({
         type: 'alert_with_print_statement',
@@ -691,9 +769,9 @@ window.showStatement = async function(id) {
 };
 
 window.showLateCustomers = async function() {
-    let lateList = customers.filter(c => c.isLate).map(c => c.name).join("\n- ");
+    let lateList = customers.filter(c => c.isLate).map(c => c.name).join("<br>- ");
     if (lateList) {
-        await customAlert("قائمة الزبائن المتأخرين:\n\n- " + lateList);
+        await customAlert("<div style='text-align:right'>قائمة الزبائن المتأخرين:<br><br>- " + lateList + "</div>");
     } else {
         await customAlert("لا يوجد زبائن متأخرين حالياً.");
     }
@@ -732,9 +810,9 @@ window.printReceipt = function(customerName, amount, date, notes, remainingDebt)
     let contentHTML = `
         <div class="receipt-container">
             <div class="receipt-header-box">
-                <h2 style="margin: 0; font-size: 20px;">مجمع كامل فون للتقسيط</h2>
-                <p style="margin: 5px 0; font-size: 13px;">اجهزة كهربائية - اثاث منزلية - موبايلات</p>
-                <p style="margin: 5px 0; font-size: 14px; font-weight: bold; direction: ltr;">0773 676 1213 &nbsp;&nbsp;&nbsp; 0781 800 7750</p>
+                <h2 style="margin: 0; font-size: 16px;">مجمع كامل فون للتقسيط</h2>
+                <p style="margin: 3px 0; font-size: 11px;">اجهزة كهربائية - اثاث منزلية - موبايلات</p>
+                <p style="margin: 3px 0; font-size: 12px; font-weight: bold; direction: ltr;">0773 676 1213 &nbsp;&nbsp; 0781 800 7750</p>
             </div>
             
             <div class="receipt-info-row">
@@ -784,19 +862,29 @@ window.printReceipt = function(customerName, amount, date, notes, remainingDebt)
     printWindow.document.write('<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">');
     printWindow.document.write('<style>');
     printWindow.document.write(`
-        @page { size: 80mm auto; margin: 0; }
-        body { font-family: 'Tajawal', sans-serif; padding: 10px; margin: 0; background: #fff; color: #000; font-size: 16px; width: 300px; margin: auto; }
-        .receipt-container { width: 100%; }
-        .receipt-header-box { border: 1px solid #000; text-align: center; padding: 10px; margin-bottom: 10px; }
-        .receipt-info-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; font-size: 14px;}
-        .receipt-customer-box { border: 1px solid #000; border-radius: 20px; padding: 6px 10px; text-align: right; font-weight: bold; font-size: 14px; margin: 0 15px 10px 15px; }
-        .receipt-notes { text-align: right; font-weight: bold; margin-bottom: 10px; font-size: 14px;}
-        .receipt-table { width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; margin-bottom: 10px;}
-        .receipt-table th { font-weight: normal; font-size: 14px; padding-bottom: 5px;}
-        .receipt-table td { border: 1px solid #000; padding: 8px; font-size: 15px;}
+        @page { size: 80mm 110mm; margin: 0; }
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+            margin: 0; 
+            padding: 5px;
+            background: #fff; 
+            color: #000; 
+            width: 80mm;
+            height: 110mm;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+        .receipt-container { width: 100%; height: 100%; }
+        .receipt-header-box { border: 1px solid #000; text-align: center; padding: 5px; margin-bottom: 8px; }
+        .receipt-info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; font-size: 12px;}
+        .receipt-customer-box { border: 1px solid #000; border-radius: 15px; padding: 5px; text-align: right; font-weight: bold; font-size: 12px; margin: 0 5px 8px 5px; }
+        .receipt-notes { text-align: right; font-weight: bold; margin-bottom: 8px; font-size: 12px;}
+        .receipt-table { width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; margin-bottom: 8px;}
+        .receipt-table th { font-weight: normal; font-size: 12px; padding-bottom: 3px;}
+        .receipt-table td { border: 1px solid #000; padding: 5px; font-size: 13px;}
         .receipt-table td:first-child { width: 50%; }
         .receipt-table td:nth-child(2) { width: 50%; }
-        .receipt-footer-time { text-align: center; font-size: 12px; margin-top: 10px; direction: ltr;}
+        .receipt-footer-time { text-align: center; font-size: 10px; margin-top: 5px; direction: ltr;}
     `);
     printWindow.document.write('</style>');
     printWindow.document.write('</head><body>');
@@ -833,19 +921,25 @@ window.printStatement = function(customer) {
     printData('كشف حساب / معاملات الزبون', content);
 };
 
+window.openSystem = async function(systemType) {
+    let pass = await showModal({ type: 'password_prompt', message: 'أدخل رمز الدخول:' });
+    if (pass === "1991") {
+        document.getElementById('landingPage').style.display = 'none';
+        document.querySelector('.sidebar').style.display = 'flex';
+        document.querySelector('.main-content').style.display = 'block';
+        await loadLocalData();
+        
+        if (systemType === 'materials') {
+            switchPage('materialsPage', document.querySelectorAll('.nav-btn')[0]);
+        } else {
+            switchPage('installmentsPage', document.querySelectorAll('.nav-btn')[1]);
+        }
+    } else if (pass !== null) {
+        await customAlert("رمز خاطئ!");
+    }
+};
+
 window.onload = async function() {
     document.querySelector('.sidebar').style.display = 'none';
     document.querySelector('.main-content').style.display = 'none';
-    
-    while(true) {
-        let pass = await showModal({ type: 'password_prompt', message: '' });
-        if (pass === "1991") {
-            document.querySelector('.sidebar').style.display = 'flex';
-            document.querySelector('.main-content').style.display = 'block';
-            await loadLocalData();
-            break;
-        } else if (pass !== null) {
-            await customAlert("رمز خاطئ!");
-        }
-    }
 };
