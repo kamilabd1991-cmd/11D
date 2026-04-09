@@ -362,3 +362,19 @@ tr:hover { background-color: rgba(255,255,255,0.1); }
 .modal-form-group select option {
     color: #000;
 }
+
+@media print {
+    @page {
+        margin: 0 !important;
+    }
+    
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    * {
+        page-break-after: auto;
+        page-break-before: auto;
+    }
+}
